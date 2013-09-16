@@ -7,12 +7,16 @@
 #
 # WARNING! All changes made in this file will be lost!
 
-from PyQt4 import QtCore, QtGui
+try:
+    from PyQt4 import QtCore, QtGui
+except:
+    from PySide import QtCore, QtGui
 
 try:
     _fromUtf8 = QtCore.QString.fromUtf8
 except AttributeError:
     _fromUtf8 = lambda s: s
+
 
 class Ui_MainWindow(object):
     def setupUi(self, MainWindow):
