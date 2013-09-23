@@ -10,9 +10,8 @@ except ImportError:
 
 
 class GOLMatrix(QtCore.QObject):
-    # TODO: Naci kako ovo da se spoji u jedan signal sa razlicitim parametrima
-    # Tako da jedan signal nema parametre, a drugi ima dict
-    # nesto kao clicked() i clicked(bool)
+    # TODO: How to merge these two signals into one signal with parameter
+    # overload (something like clicked() and clicked(bool))
     changed = QtCore.Signal(dict)
     reseted = QtCore.Signal()
 
@@ -37,66 +36,70 @@ class GOLMatrix(QtCore.QObject):
         self.come_to_life = come_to_life
 
     def is_alive(self, x, y):
-        ''' Vraca True ako je celija (x, y) ziva, False inace'''
+        ''' Returns `True` if cell (x, y) is alive, `False` otherwise.'''
         return (x, y) in self.cur_population
 
     def set_alive(self, x, y):
-        ''' Ozivljava celiju (x, y).'''
+        ''' Marks cell (x, y) as alive.'''
         if not self.is_alive(x, y):
             self.cur_population.add((x, y))
         self.changed.emit({(x, y): True})
 
     def set_dead(self, x, y):
-        ''' Ubija celiju (x, y) '''
+        ''' Kills cell (x, y) '''
         if self.is_alive(x, y):
             self.cur_population.remove((x, y))
         self.changed.emit({(x, y): False})
 
     def get_neighbours(self, x, y):
-        ''' Vraca sve susede celije (x, y).'''
+        ''' Returns all neighbors of cell (x, y).'''
         return ((x-1, y-1), (x, y-1), (x+1, y-1),
                 (x+1, y), (x+1, y+1), (x, y+1),
                 (x-1, y+1), (x-1, y))
 
     def get_live_cells(self):
-        ''' Vraca celokupnu zivu populaciju.'''
+        ''' Returns all alive cells.'''
         return self.cur_population
 
     def count_live_neighbours(self, x, y):
-        ''' Vraca broj zivih suseda celije (x, y). '''
+        ''' Returns number of alive neighbors of cell (x, y). '''
         return sum(map(lambda coord: self.is_alive(coord[0], coord[1]), self.get_neighbours(x, y)))
 
     def get_next_state(self, x, y):
-        '''Vraca stanje celije na (x, y) u sledecoj iteraciji.
+        ''' Returns state of cell (x, y) for next iteration.
 
-        Vraca True ako celija treba da bude ziva, False ako treba da bude mrtva.'''
+        Return `True` if cell should be alive, `False` otherwise.'''
         live_neighbours = self.count_live_neighbours(x, y)
         return ((self.is_alive(x, y) and self.from_survive <= live_neighbours <= self.to_survive) or
-           (not self.is_alive(x, y) and live_neighbours == self.come_to_life))
+                (not self.is_alive(x, y) and live_neighbours == self.come_to_life))
 
     def reset(self):
         self.cur_population = set()
         self.reseted.emit()
 
     def shrink_world(self):
-        ''' Ubija sve celije koje se ne vide na canvasu.
+        ''' Kills all cells that are not visible on canvas.
 
-        Trenutna implementacija ubija celije koje nisu u pravougaoniku (-3, -3, 53, 83),
-        ali ovo bi trebalo uraditi tako da uzme u obzir vidljivu povrsinu na ekranu.'''
+        Current implementation kill all cells that are not in (-3, -3, 53, 83),
+        but this should be done in respect to visible area on screen.
+        '''
+
         def should_survive(cell):
             return cell[0] > -3 and cell[0] < 83 and cell[1] > -3 and cell[1] < 53
         self.cur_population = set(filter(should_survive, self.cur_population))
 
     def next_iteration(self):
-        ''' Sracunava stanje sledenje generacije. '''
-        # TODO: Optimizovati ovo, vec za par stotina zivih celija se vidi usporenje,
-        # kad dodje do 1000 vise nije upotrebljivo
+        ''' Calculates state of next generation.. '''
+        # TODO: This should be optimized. For only a few hundred alive cells
+        # show down ins visible.
         self.next_population = set()
-        checked = set() # celije koje smo vec proverili ne moramo opet
-        # za svaku zivu jedinku proveravamo samo da li treba menjati njeno ili stanje njenih suseda
+        checked = set()  # no need to check cell that are already checked
+        # for every live cell check if its state should be changed or state
+        # of its neighbors
         for live in self.get_live_cells():
             for neighbour in self.get_neighbours(*live):
-                if neighbour in checked: continue
+                if neighbour in checked:
+                    continue
                 if not neighbour in self.next_population and self.get_next_state(*neighbour):
                     self.next_population.add(neighbour)
                 checked.add(neighbour)
@@ -106,9 +109,8 @@ class GOLMatrix(QtCore.QObject):
 
         self.reseted.emit()
 
-
     def to_string(self):
-        # TODO: Pamtiti i parametre from_survive, to_survice i come_to_life
+        # TODO: Remember `from_survive`, `to_survive` and `come_to_life`
         import pprint
         return pprint.pformat(self.get_live_cells())
 
@@ -134,7 +136,7 @@ class Cell(QtGui.QGraphicsItem):
 
     def paint(self, painter, options, widget):
         painter.setBrush(Qt.black)
-        # TODO: Bolji nacin za odredjivanje ovih offseta
+        # TODO: Better way to determine offset?
         painter.drawEllipse(3, 3, self.size - 6, self.size - 6)
 
 
@@ -160,31 +162,32 @@ class Board(QtGui.QGraphicsScene):
 
     @QtCore.Slot()
     def redo_all(self):
-        ''' Iscrtava scenu ispocetka '''
+        ''' Redraws scene. '''
         self.clear()
         for x, y in self.matrix.get_live_cells():
             self.add_cell(x, y)
 
     def next_iteration(self):
-        ''' Trazi od matrice da sracuna sledecu genreaciju.'''
+        ''' Requests form matrix to calculate next iteration.'''
         self.matrix.next_iteration()
 
     def reset(self):
-        ''' Resetuje stanje, ubija sve zive celije. Prakticno pravi novu matricu stanja. '''
+        ''' Resets state (kills all cells)'''
         self.matrix.reset()
 
     def get_postion(self, x, y):
-        ''' Vraca poziciju celije (x, y) u koordinatnom sistemu scene.'''
-        return QtCore.QPointF(x*self.square_size+self.border_width, y*self.square_size+self.border_width)
+        ''' Returns position of cell (x, y) in scene coordinate system.'''
+        return QtCore.QPointF(x*self.square_size+self.border_width,
+                              y*self.square_size+self.border_width)
 
     def add_cell(self, x, y):
-        ''' Dodaje celiju na koordinate (x, y).'''
+        ''' Adds cell to (x, y) coordinates.'''
         item = Cell(size=self.square_size)
         item.setPos(self.get_postion(x, y))
         self.addItem(item)
 
     def remove_cell(self, x, y):
-        ''' Uklanja celiju sa koordinata (x, y).'''
+        ''' Removes cell from (x, y) coordinates.'''
         self.removeItem(self.itemAt(self.get_postion(x, y)))
 
 
@@ -195,20 +198,19 @@ class BoardView(QtGui.QGraphicsView):
         #self.setViewportUpdateMode(self.BoundingRectViewportUpdate)
         self.setRenderHint(QtGui.QPainter.Antialiasing)
 
-        # TODO: ovo uzeti iz nekih podesavanja
+        # TODO: Take this from settings
         self.square_size = 20
         self.border_width = 5
 
-        # krecemo iz gornjeg levog ugla
+        # Start from top left corner
         self.setAlignment(Qt.AlignLeft | Qt.AlignTop)
 
-        # ne treba nam scroll bar
+        # No need for scroll bar
         self.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
 
         self.scene = Board(self, square_size=self.square_size, border_width=self.border_width)
         self.setScene(self.scene)
-
 
         self.timer = QtCore.QTimer(self)
         self.timer.setInterval(300)
@@ -227,24 +229,31 @@ class BoardView(QtGui.QGraphicsView):
         super(BoardView, self).mousePressEvent(event)
 
     def drawBackground(self, painter, rect):
-        ''' Iscrtava pozadinu. '''
+        ''' Background drawing. '''
         painter.setPen(Qt.DotLine)
-        # uspravne linije
-        for i in xrange(int(rect.left() + self.border_width), int(rect.right() - self.border_width), self.square_size):
-            painter.drawLine(i, rect.bottom() + self.border_width, i, rect.top() - self.border_width)
-        # vodoravne linije
-        for i in xrange(int(rect.top() + self.border_width), int(rect.bottom() - self.border_width), self.square_size):
-            painter.drawLine(rect.left() + self.border_width, i, rect.right() - self.border_width, i)
+        # vertical lines
+        for i in xrange(int(rect.left() + self.border_width),
+                        int(rect.right() - self.border_width),
+                        self.square_size):
+            painter.drawLine(i, rect.bottom() + self.border_width, i,
+                             rect.top() - self.border_width)
+        # horizontal lines
+        for i in xrange(int(rect.top() + self.border_width),
+                        int(rect.bottom() - self.border_width),
+                        self.square_size):
+            painter.drawLine(rect.left() + self.border_width, i,
+                             rect.right() - self.border_width, i)
 
-
-        painter.setPen(QtGui.QPen(Qt.black, self.border_width, Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin))
-        border = QtCore.QRectF(rect.left() + self.border_width, rect.top() + self.border_width,
-                             rect.width() - 2*self.border_width, rect.height() - 2*self.border_width)
+        painter.setPen(QtGui.QPen(Qt.black, self.border_width, Qt.SolidLine,
+                                  Qt.RoundCap, Qt.RoundJoin))
+        border = QtCore.QRectF(rect.left() + self.border_width,
+                               rect.top() + self.border_width,
+                               rect.width() - 2*self.border_width,
+                               rect.height() - 2*self.border_width)
         painter.drawRect(border)
 
     def resizeEvent(self, event):
-        # Ovo zakucava pocetak koordinatnog sistema scene u gornji levi ugao view-a
-        # NOTE: Kako poravnati celije sa pozadinom bez ovog zakucavanja?
+        # Fixes start of coordinate system to top-left corner of view
         self.setSceneRect(QtCore.QRectF(0, 0, self.width(), self.height()))
         super(BoardView, self).resizeEvent(event)
 

@@ -63,9 +63,9 @@ class MainWindow(QtGui.QMainWindow):
         self.ui.board.scene.matrix.changed.connect(self.update_statusbar)
         self.ui.board.scene.matrix.reseted.connect(self.update_statusbar)
 
-
     def update_statusbar(self):
-        self.ui.statusBar.showMessage('Live cells: %d' % len(self.ui.board.scene.matrix.get_live_cells()))
+        self.ui.statusBar.showMessage('Live cells: %d' %
+                                      len(self.ui.board.scene.matrix.get_live_cells()))
 
     def update_label(self, value):
         self.label.setText(str(value))
